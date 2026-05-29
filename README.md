@@ -1,13 +1,13 @@
 # useFetch
 
-A lightweight, modular HTTP composable for Vue 3.5+ inspired by Nuxt's `useFetch`. Built with TypeScript and designed for real-world use — supports interceptors, Laravel pagination, retries, caching, reactive params, and more.
+A lightweight, modular, zero-dependency HTTP composable for Vue 3.5+, inspired by Nuxt's `useFetch`. Built with TypeScript, works with both **JavaScript** and **TypeScript** Vue projects.
 
 ---
 
 ## Features
 
-- Full **TypeScript** support
-- **Modular architecture** — core, cache, interceptors, watcher all separated
+- Full **TypeScript** support — works with JS too
+- **Modular architecture** — core, cache, interceptors, watcher, dedup all separated
 - **Auto-execute** on mount with `immediate`
 - **Retry** failed requests with configurable delay
 - **Laravel pagination** support out of the box
@@ -15,59 +15,85 @@ A lightweight, modular HTTP composable for Vue 3.5+ inspired by Nuxt's `useFetch
 - **Session cache** with custom cache key
 - **Timeout** & **AbortController** support
 - **Pick** & **transform** response data
-- **Global interceptors** for request & response
+- **Global interceptors** — request, response, and error with `eject` support
+- **Status hooks** — global HTTP status code error handling
+- **Request deduplication** — prevent duplicate in-flight requests
+- **Multiple instances** — isolated configs per API service
 - **Credentials** / cookie support
-- **FormData** auto-detection (no manual `Content-Type` needed)
+- **FormData** auto-detection
 - Lifecycle callbacks: `onBeforeRequest`, `onSuccess`, `onError`, `onFinally`
+- **Zero dependencies**
 
 ---
 
 ## Requirements
 
 - Vue `3.5+`
-- TypeScript
-- Vite (uses `import.meta.env.VITE_API_URL`)
+- Vite (uses `import.meta.env.VITE_API_URL` as default base URL)
+
+---
+
+## Installation
+
+```bash
+npm install @mlyrmdhnn/usefetch
+```
+
+---
+
+## Setup
+
+Set your base API URL in `.env`:
+
+```env
+VITE_API_URL=https://your-api.com/api/
+```
+
+Or set it manually in `main.ts` / `main.js`:
+
+```ts
+import { useFetch } from "@mlyrmdhnn/usefetch";
+
+useFetch.baseURL("https://your-api.com/api/");
+```
 
 ---
 
 ## Project Structure
 
 ```
-useFetch/
-├── http/
-│   └── useFetch.ts         # Main composable entry point
-├── lib/
-│   └── fetch/
-│       ├── cache.ts        # SessionStorage cache handler
-│       ├── core.ts         # Core fetch logic with retry & interceptors
-│       ├── helpers.ts      # Utility functions (sleep, buildQueryString)
-│       ├── interceptor.ts  # Global request & response interceptors
-│       ├── types.ts        # TypeScript types & interfaces
-│       └── watcher.ts      # Reactive params watcher
-└── .env
-```
-
----
-
-## Installation
-
-Copy the `http/` and `lib/` folders into your project, then set your base API URL in `.env`:
-
-```env
-VITE_API_URL=https://your-api.com/api/
-```
-
-Import the composable wherever you need it:
-
-```ts
-import { useFetch } from "@/http/useFetch";
+lib/
+└── fetch/
+    ├── cache.ts        # SessionStorage cache handler
+    ├── config.ts       # Global config & instance factory
+    ├── core.ts         # Core fetch logic
+    ├── dedup.ts        # Request deduplication
+    ├── helpers.ts      # Utility functions
+    ├── interceptor.ts  # Global & instance interceptors
+    ├── statusHooks.ts  # HTTP status code hooks
+    ├── types.ts        # TypeScript types & interfaces
+    └── watcher.ts      # Reactive params watcher
+http/
+└── useFetch.ts         # Main composable entry point
 ```
 
 ---
 
 ## Basic Usage
 
+### JavaScript
+
+```js
+import { useFetch } from "@mlyrmdhnn/usefetch";
+
+const { data, pending, error } = useFetch("/users");
+```
+
+### TypeScript
+
 ```ts
+import { useFetch } from "@mlyrmdhnn/usefetch";
+
 const { data, pending, error } = useFetch<User[]>("/users");
 ```
 
@@ -92,7 +118,7 @@ useFetch<T>(endpoint: string, options?: HttpOptions)
 | `pagination`      | `boolean`             | `false`        | Enable Laravel pagination mode    |
 | `watchParams`     | `boolean`             | `false`        | Re-fetch when params change       |
 | `credentials`     | `boolean`             | `false`        | Include cookies/credentials       |
-| `baseURL`         | `string`              | `VITE_API_URL` | Override base API URL             |
+| `baseURL`         | `string`              | `VITE_API_URL` | Override base URL per request     |
 | `pick`            | `string`              | `''`           | Pick a specific key from response |
 | `transform`       | `(data: any) => any`  | -              | Transform response data           |
 | `timeout`         | `number`              | `10000`        | Request timeout in ms             |
@@ -100,6 +126,7 @@ useFetch<T>(endpoint: string, options?: HttpOptions)
 | `cacheKey`        | `string`              | `endpoint`     | Custom cache key                  |
 | `retry`           | `number`              | `0`            | Number of retry attempts          |
 | `retryDelay`      | `number`              | `1000`         | Delay between retries in ms       |
+| `dedup`           | `boolean`             | `false`        | Enable request deduplication      |
 | `headers`         | `HttpHeaders`         | `{}`           | Custom request headers            |
 | `onBeforeRequest` | `(payload) => void`   | -              | Callback before request fires     |
 | `onSuccess`       | `(data) => void`      | -              | Callback on success               |
@@ -108,21 +135,21 @@ useFetch<T>(endpoint: string, options?: HttpOptions)
 
 ### Return Values
 
-| Value         | Type                                               | Description                           |
-| ------------- | -------------------------------------------------- | ------------------------------------- |
-| `data`        | `Ref<T \| null>`                                   | Response data                         |
-| `error`       | `Ref<any>`                                         | Error object if request failed        |
-| `pending`     | `Ref<boolean>`                                     | Loading state                         |
-| `status`      | `Ref<'idle' \| 'pending' \| 'success' \| 'error'>` | Request status                        |
-| `links`       | `Ref<any[]>`                                       | Pagination links (Laravel)            |
-| `from`        | `Ref<number>`                                      | Pagination from (Laravel)             |
-| `to`          | `Ref<number>`                                      | Pagination to (Laravel)               |
-| `total`       | `Ref<number>`                                      | Total records (Laravel)               |
-| `currentPage` | `Ref<number>`                                      | Current page (Laravel)                |
-| `execute`     | `() => Promise`                                    | Manually trigger the request          |
-| `refresh`     | `() => Promise`                                    | Alias for execute                     |
-| `clear`       | `() => void`                                       | Reset data, error, and status to idle |
-| `abort`       | `() => void`                                       | Cancel the active request             |
+| Value         | Type                                               | Description                       |
+| ------------- | -------------------------------------------------- | --------------------------------- |
+| `data`        | `Ref<T \| null>`                                   | Response data                     |
+| `error`       | `Ref<any>`                                         | Error object if request failed    |
+| `pending`     | `Ref<boolean>`                                     | Loading state                     |
+| `status`      | `Ref<'idle' \| 'pending' \| 'success' \| 'error'>` | Request status                    |
+| `links`       | `Ref<any[]>`                                       | Pagination links (Laravel)        |
+| `from`        | `Ref<number>`                                      | Pagination from (Laravel)         |
+| `to`          | `Ref<number>`                                      | Pagination to (Laravel)           |
+| `total`       | `Ref<number>`                                      | Total records (Laravel)           |
+| `currentPage` | `Ref<number>`                                      | Current page (Laravel)            |
+| `execute`     | `() => Promise`                                    | Manually trigger request          |
+| `refresh`     | `() => Promise`                                    | Alias for execute                 |
+| `clear`       | `() => void`                                       | Reset data, error, status to idle |
+| `abort`       | `() => void`                                       | Cancel the active request         |
 
 ---
 
@@ -159,10 +186,36 @@ await execute();
 
 ---
 
+### PUT / PATCH / DELETE
+
+```ts
+// PUT
+const { execute } = useFetch("/products/1", {
+  method: "PUT",
+  payload: { name: "Updated" },
+  immediate: false,
+});
+
+// PATCH
+const { execute } = useFetch("/products/1", {
+  method: "PATCH",
+  payload: { price: 60000 },
+  immediate: false,
+});
+
+// DELETE
+const { execute } = useFetch("/products/1", {
+  method: "DELETE",
+  immediate: false,
+});
+```
+
+---
+
 ### With Query Params
 
 ```ts
-const { data } = useFetch<Order[]>("/orders", {
+const { data } = useFetch("/orders", {
   params: {
     status: "active",
     limit: 10,
@@ -181,12 +234,12 @@ import { reactive } from "vue";
 
 const params = reactive({ page: 1, search: "" });
 
-const { data } = useFetch<User[]>("/users", {
+const { data } = useFetch("/users", {
   params,
   watchParams: true,
 });
 
-// Changing params will automatically re-fetch
+// changing params will automatically re-fetch
 params.page = 2;
 params.search = "john";
 ```
@@ -225,7 +278,7 @@ Expects this response structure from Laravel:
 
 ```ts
 // Response: { status: true, result: [...] }
-const { data } = useFetch<User[]>("/users", {
+const { data } = useFetch("/users", {
   pick: "result",
 });
 // data.value → [...]
@@ -236,8 +289,8 @@ const { data } = useFetch<User[]>("/users", {
 ### Transform Response
 
 ```ts
-const { data } = useFetch<string[]>("/users", {
-  transform: (res) => res.map((user: User) => user.name),
+const { data } = useFetch("/users", {
+  transform: (res) => res.map((user) => user.name),
 });
 ```
 
@@ -257,30 +310,7 @@ const { execute } = useFetch("/upload", {
 });
 ```
 
-> `Content-Type` is automatically omitted for `FormData` so the browser sets the correct boundary.
-
----
-
-### With Auth Header
-
-```ts
-const { data } = useFetch<Profile>("/profile", {
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-});
-```
-
----
-
-### Retry on Failure
-
-```ts
-const { data, error } = useFetch("/unstable-endpoint", {
-  retry: 3,
-  retryDelay: 2000,
-});
-```
+> `Content-Type` is automatically omitted for `FormData` so the browser sets the correct multipart boundary.
 
 ---
 
@@ -297,6 +327,35 @@ const { data } = useFetch("/config", {
 
 ---
 
+### Retry on Failure
+
+```ts
+const { data } = useFetch("/unstable-endpoint", {
+  retry: 3,
+  retryDelay: 2000, // wait 2s between each retry
+});
+```
+
+---
+
+### Request Deduplication
+
+Prevents the same request from firing multiple times simultaneously. Useful when multiple components mount at the same time and need the same data.
+
+```ts
+// ComponentA.vue
+const { data } = useFetch("/user/profile", { dedup: true });
+
+// ComponentB.vue — mounts at the same time
+const { data } = useFetch("/user/profile", { dedup: true });
+
+// Result: only ONE actual HTTP request fires, both components get the same result ✅
+```
+
+> Deduplication only applies to `GET` requests.
+
+---
+
 ### Manual Execute + Abort
 
 ```ts
@@ -310,55 +369,176 @@ abort(); // cancel anytime
 
 ---
 
-## Global Interceptors
+## Global Configuration
 
-One of the most powerful features — set interceptors once globally, and every request/response goes through them automatically.
+Set once in `main.ts` or `main.js`, applies to every request automatically.
+
+### Base URL
+
+```ts
+useFetch.baseURL("https://api.example.com/api/");
+```
+
+### Default Headers
+
+```ts
+useFetch.headers({
+  "X-API-KEY": "your-api-key",
+  "Accept-Language": "id",
+});
+```
+
+> Per-request headers always override global headers.
+
+---
+
+## Global Interceptors
 
 ### Request Interceptor
 
-Useful for injecting auth tokens, adding global headers, etc.
+Runs before every request. Useful for injecting auth tokens globally.
 
 ```ts
-import { fetchInterceptor } from "@/lib/fetch/interceptor";
-
-fetchInterceptor.request.use(async (config: RequestInit) => {
+const id = useFetch.interceptor.request.use(async (config) => {
   const token = localStorage.getItem("token");
-
   if (token) {
-    (config.headers as Record<string, string>)[
-      "Authorization"
-    ] = `Bearer ${token}`;
+    config.headers["Authorization"] = `Bearer ${token}`;
   }
-
   return config;
 });
+
+// remove later if needed
+useFetch.interceptor.request.eject(id);
 ```
 
 ### Response Interceptor
 
-Useful for global error handling, logging, token refresh, etc.
+Runs after every successful response.
 
 ```ts
-import { fetchInterceptor } from "@/lib/fetch/interceptor";
-
-fetchInterceptor.response.use(async (result: any) => {
-  if (result?.code === 401) {
-    // handle token expiry globally
-    console.warn("Unauthorized, redirecting to login...");
-  }
-
+const id = useFetch.interceptor.response.use(async (result) => {
+  console.log("Response received:", result);
   return result;
 });
+
+useFetch.interceptor.response.eject(id);
 ```
 
-> Register interceptors once in your app entry point (e.g. `main.ts` or a plugin file).
+### Error Interceptor
+
+Runs when a request throws or response is not ok.
+
+```ts
+const id = useFetch.interceptor.error.use(async (error) => {
+  console.error("Request failed:", error);
+  return error;
+});
+
+useFetch.interceptor.error.eject(id);
+```
 
 ---
 
-## HTTP Methods Supported
+## Status Hooks
+
+Handle specific HTTP status codes globally — no need to repeat error handling in every component.
+
+```ts
+// main.ts / main.js
+useFetch.onError(401, () => {
+  router.push("/login");
+});
+
+useFetch.onError(403, () => {
+  toast.error("You are not authorized!");
+});
+
+useFetch.onError(404, () => {
+  toast.error("Resource not found!");
+});
+
+useFetch.onError(500, () => {
+  toast.error("Server error, please try again later");
+});
+```
+
+---
+
+## Multiple Instances
+
+Create isolated instances with their own base URL, headers, interceptors, and status hooks. Perfect for projects that communicate with multiple APIs.
+
+```ts
+// main.ts / main.js
+import { useFetch } from "@mlyrmdhnn/usefetch";
+
+// global instance
+useFetch.baseURL("https://api.example.com/api/");
+
+// isolated instance for payment service
+export const paymentApi = useFetch.create({
+  baseURL: "https://payment.example.com/api/",
+  headers: { "X-API-KEY": "payment-key" },
+});
+
+// isolated instance for reporting service
+export const reportApi = useFetch.create({
+  baseURL: "https://report.example.com/api/",
+});
+```
+
+Each instance has its own `baseURL`, `headers`, `interceptor`, and `onError`:
+
+```ts
+// instance specific interceptor
+paymentApi.interceptor.request.use(async (config) => {
+  config.headers["X-Signature"] = generateSignature();
+  return config;
+});
+
+// instance specific status hook
+paymentApi.onError(422, (err) => {
+  toast.error("Payment validation failed");
+});
+```
+
+Then use anywhere:
+
+```ts
+// global instance
+const { data } = useFetch("/users");
+
+// payment instance
+const { data } = paymentApi("/transactions");
+
+// report instance
+const { data } = reportApi("/summary");
+```
+
+---
+
+## HTTP Methods
 
 ```ts
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+```
+
+---
+
+## TypeScript Support
+
+All types are exported and available:
+
+```ts
+import type {
+  HttpOptions,
+  HttpHeaders,
+  HttpMethod,
+  RequestInterceptorFn,
+  ResponseInterceptorFn,
+  ErrorInterceptorFn,
+  InterceptorHandler,
+} from "@mlyrmdhnn/usefetch";
 ```
 
 ---
