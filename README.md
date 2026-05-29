@@ -1,22 +1,24 @@
 # useFetch
 
-A lightweight, flexible HTTP composable for Vue 3.5+ inspired by Nuxt's `useFetch`. Built with TypeScript, designed for real-world use cases including Laravel pagination, request retries, caching, and more.
+A lightweight, modular HTTP composable for Vue 3.5+ inspired by Nuxt's `useFetch`. Built with TypeScript and designed for real-world use — supports interceptors, Laravel pagination, retries, caching, reactive params, and more.
 
 ---
 
 ## Features
 
-- Full **TypeScript** support
-- **Auto-execute** on mount with `immediate`
-- **Retry** failed requests with configurable delay
-- **Laravel pagination** support out of the box
-- **Reactive params** watcher
-- **Session cache** with custom cache key
-- **Timeout** & **AbortController** support
-- **Pick** & **transform** response data
-- **Credentials** / cookie support
-- Lifecycle callbacks: `onBeforeRequest`, `onSuccess`, `onError`, `onFinally`
-- FormData auto-detection (no manual `Content-Type` needed)
+- 🔷 Full **TypeScript** support
+- 🧩 **Modular architecture** — core, cache, interceptors, watcher all separated
+- ⚡ **Auto-execute** on mount with `immediate`
+- 🔁 **Retry** failed requests with configurable delay
+- 📄 **Laravel pagination** support out of the box
+- 👀 **Reactive params** watcher (`ref`, `reactive`, or plain object)
+- 🧠 **Session cache** with custom cache key
+- ⏱️ **Timeout** & **AbortController** support
+- 🎯 **Pick** & **transform** response data
+- 🔔 **Global interceptors** for request & response
+- 🍪 **Credentials** / cookie support
+- 📦 **FormData** auto-detection (no manual `Content-Type` needed)
+- 🔔 Lifecycle callbacks: `onBeforeRequest`, `onSuccess`, `onError`, `onFinally`
 
 ---
 
@@ -28,20 +30,37 @@ A lightweight, flexible HTTP composable for Vue 3.5+ inspired by Nuxt's `useFetc
 
 ---
 
+## Project Structure
+
+```
+useFetch/
+├── http/
+│   └── useFetch.ts         # Main composable entry point
+├── lib/
+│   └── fetch/
+│       ├── cache.ts        # SessionStorage cache handler
+│       ├── core.ts         # Core fetch logic with retry & interceptors
+│       ├── helpers.ts      # Utility functions (sleep, buildQueryString)
+│       ├── interceptor.ts  # Global request & response interceptors
+│       ├── types.ts        # TypeScript types & interfaces
+│       └── watcher.ts      # Reactive params watcher
+└── .env
+```
+
+---
+
 ## Installation
 
-Just copy `useFetch.ts` into your project's composables folder:
-
-```
-src/
-└── composables/
-    └── useFetch.ts
-```
-
-Then set your base API URL in your `.env` file:
+Copy the `http/` and `lib/` folders into your project, then set your base API URL in `.env`:
 
 ```env
-VITE_API_URL=https://your-api.com/api
+VITE_API_URL=https://your-api.com/api/
+```
+
+Import the composable wherever you need it:
+
+```ts
+import { useFetch } from "@/http/useFetch";
 ```
 
 ---
@@ -49,8 +68,6 @@ VITE_API_URL=https://your-api.com/api
 ## Basic Usage
 
 ```ts
-import { useFetch } from "@/composables/useFetch";
-
 const { data, pending, error } = useFetch<User[]>("/users");
 ```
 
@@ -58,7 +75,7 @@ const { data, pending, error } = useFetch<User[]>("/users");
 
 ## API
 
-### Parameters
+### Signature
 
 ```ts
 useFetch<T>(endpoint: string, options?: HttpOptions)
@@ -71,7 +88,7 @@ useFetch<T>(endpoint: string, options?: HttpOptions)
 | `method`          | `HttpMethod`          | `'GET'`        | HTTP method                       |
 | `params`          | `Record<string, any>` | `{}`           | URL query parameters              |
 | `payload`         | `any`                 | `null`         | Request body                      |
-| `immediate`       | `boolean`             | `true`         | Auto-execute on call              |
+| `immediate`       | `boolean`             | `true`         | Auto-execute on composable call   |
 | `pagination`      | `boolean`             | `false`        | Enable Laravel pagination mode    |
 | `watchParams`     | `boolean`             | `false`        | Re-fetch when params change       |
 | `credentials`     | `boolean`             | `false`        | Include cookies/credentials       |
@@ -84,28 +101,28 @@ useFetch<T>(endpoint: string, options?: HttpOptions)
 | `retry`           | `number`              | `0`            | Number of retry attempts          |
 | `retryDelay`      | `number`              | `1000`         | Delay between retries in ms       |
 | `headers`         | `HttpHeaders`         | `{}`           | Custom request headers            |
-| `onBeforeRequest` | `(payload) => void`   | -              | Callback before request           |
+| `onBeforeRequest` | `(payload) => void`   | -              | Callback before request fires     |
 | `onSuccess`       | `(data) => void`      | -              | Callback on success               |
 | `onError`         | `(error) => void`     | -              | Callback on error                 |
 | `onFinally`       | `() => void`          | -              | Callback after request completes  |
 
 ### Return Values
 
-| Value         | Type                                               | Description                    |
-| ------------- | -------------------------------------------------- | ------------------------------ |
-| `data`        | `Ref<T \| null>`                                   | Response data                  |
-| `error`       | `Ref<any>`                                         | Error object if request failed |
-| `pending`     | `Ref<boolean>`                                     | Loading state                  |
-| `status`      | `Ref<'idle' \| 'pending' \| 'success' \| 'error'>` | Request status                 |
-| `links`       | `Ref<any[]>`                                       | Pagination links (Laravel)     |
-| `from`        | `Ref<number>`                                      | Pagination from (Laravel)      |
-| `to`          | `Ref<number>`                                      | Pagination to (Laravel)        |
-| `total`       | `Ref<number>`                                      | Total records (Laravel)        |
-| `currentPage` | `Ref<number>`                                      | Current page (Laravel)         |
-| `execute`     | `() => Promise`                                    | Manually trigger the request   |
-| `refresh`     | `() => Promise`                                    | Re-execute the request         |
-| `clear`       | `() => void`                                       | Reset data, error, and status  |
-| `abort`       | `() => void`                                       | Cancel the active request      |
+| Value         | Type                                               | Description                           |
+| ------------- | -------------------------------------------------- | ------------------------------------- |
+| `data`        | `Ref<T \| null>`                                   | Response data                         |
+| `error`       | `Ref<any>`                                         | Error object if request failed        |
+| `pending`     | `Ref<boolean>`                                     | Loading state                         |
+| `status`      | `Ref<'idle' \| 'pending' \| 'success' \| 'error'>` | Request status                        |
+| `links`       | `Ref<any[]>`                                       | Pagination links (Laravel)            |
+| `from`        | `Ref<number>`                                      | Pagination from (Laravel)             |
+| `to`          | `Ref<number>`                                      | Pagination to (Laravel)               |
+| `total`       | `Ref<number>`                                      | Total records (Laravel)               |
+| `currentPage` | `Ref<number>`                                      | Current page (Laravel)                |
+| `execute`     | `() => Promise`                                    | Manually trigger the request          |
+| `refresh`     | `() => Promise`                                    | Alias for execute                     |
+| `clear`       | `() => void`                                       | Reset data, error, and status to idle |
+| `abort`       | `() => void`                                       | Cancel the active request             |
 
 ---
 
@@ -137,7 +154,6 @@ const { execute, pending } = useFetch("/products", {
   },
 });
 
-// Trigger manually
 await execute();
 ```
 
@@ -153,6 +169,8 @@ const { data } = useFetch<Order[]>("/orders", {
   },
 });
 ```
+
+> `null` and `undefined` param values are automatically stripped from the query string.
 
 ---
 
@@ -173,6 +191,8 @@ params.page = 2;
 params.search = "john";
 ```
 
+Supports `ref`, `reactive`, and plain objects.
+
 ---
 
 ### Laravel Pagination
@@ -189,8 +209,8 @@ Expects this response structure from Laravel:
 ```json
 {
   "result": {
-    "data": [...],
-    "links": [...],
+    "data": [],
+    "links": [],
     "from": 1,
     "to": 10,
     "total": 100,
@@ -208,7 +228,7 @@ Expects this response structure from Laravel:
 const { data } = useFetch<User[]>("/users", {
   pick: "result",
 });
-// data.value = [...]
+// data.value → [...]
 ```
 
 ---
@@ -258,7 +278,7 @@ const { data } = useFetch<Profile>("/profile", {
 ```ts
 const { data, error } = useFetch("/unstable-endpoint", {
   retry: 3,
-  retryDelay: 2000, // wait 2s between each retry
+  retryDelay: 2000,
 });
 ```
 
@@ -267,7 +287,7 @@ const { data, error } = useFetch("/unstable-endpoint", {
 ### Session Cache
 
 ```ts
-const { data } = useFetch("/static-config", {
+const { data } = useFetch("/config", {
   cache: true,
   cacheKey: "app-config",
 });
@@ -280,15 +300,58 @@ const { data } = useFetch("/static-config", {
 ### Manual Execute + Abort
 
 ```ts
-const { execute, abort, pending } = useFetch("/long-request", {
+const { execute, abort } = useFetch("/long-request", {
   immediate: false,
 });
 
 execute();
-
-// Cancel if needed
-abort();
+abort(); // cancel anytime
 ```
+
+---
+
+## Global Interceptors
+
+One of the most powerful features — set interceptors once globally, and every request/response goes through them automatically.
+
+### Request Interceptor
+
+Useful for injecting auth tokens, adding global headers, etc.
+
+```ts
+import { fetchInterceptor } from "@/lib/fetch/interceptor";
+
+fetchInterceptor.request.use(async (config: RequestInit) => {
+  const token = localStorage.getItem("token");
+
+  if (token) {
+    (config.headers as Record<string, string>)[
+      "Authorization"
+    ] = `Bearer ${token}`;
+  }
+
+  return config;
+});
+```
+
+### Response Interceptor
+
+Useful for global error handling, logging, token refresh, etc.
+
+```ts
+import { fetchInterceptor } from "@/lib/fetch/interceptor";
+
+fetchInterceptor.response.use(async (result: any) => {
+  if (result?.code === 401) {
+    // handle token expiry globally
+    console.warn("Unauthorized, redirecting to login...");
+  }
+
+  return result;
+});
+```
+
+> Register interceptors once in your app entry point (e.g. `main.ts` or a plugin file).
 
 ---
 
