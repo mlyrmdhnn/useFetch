@@ -6,19 +6,19 @@ A lightweight, modular HTTP composable for Vue 3.5+ inspired by Nuxt's `useFetch
 
 ## Features
 
-- 🔷 Full **TypeScript** support
-- 🧩 **Modular architecture** — core, cache, interceptors, watcher all separated
-- ⚡ **Auto-execute** on mount with `immediate`
-- 🔁 **Retry** failed requests with configurable delay
-- 📄 **Laravel pagination** support out of the box
-- 👀 **Reactive params** watcher (`ref`, `reactive`, or plain object)
-- 🧠 **Session cache** with custom cache key
-- ⏱️ **Timeout** & **AbortController** support
-- 🎯 **Pick** & **transform** response data
-- 🔔 **Global interceptors** for request & response
-- 🍪 **Credentials** / cookie support
-- 📦 **FormData** auto-detection (no manual `Content-Type` needed)
-- 🔔 Lifecycle callbacks: `onBeforeRequest`, `onSuccess`, `onError`, `onFinally`
+- Full **TypeScript** support
+- **Modular architecture** — core, cache, interceptors, watcher all separated
+- **Auto-execute** on mount with `immediate`
+- **Retry** failed requests with configurable delay
+- **Laravel pagination** support out of the box
+- **Reactive params** watcher (`ref`, `reactive`, or plain object)
+- **Session cache** with custom cache key
+- **Timeout** & **AbortController** support
+- **Pick** & **transform** response data
+- **Global interceptors** for request & response
+- **Credentials** / cookie support
+- **FormData** auto-detection (no manual `Content-Type` needed)
+- Lifecycle callbacks: `onBeforeRequest`, `onSuccess`, `onError`, `onFinally`
 
 ---
 
