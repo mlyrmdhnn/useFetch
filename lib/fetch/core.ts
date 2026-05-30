@@ -101,18 +101,22 @@ export const fetchCore = async ({
 
         let url = "";
         try {
-          const normalizedEndpoint = endpoint.startsWith("/")
-            ? endpoint.slice(1)
-            : endpoint;
-          url = new URL(normalizedEndpoint, baseURL).toString();
+          if (
+            endpoint.startsWith("http://") ||
+            endpoint.startsWith("https://")
+          ) {
+            url = endpoint;
+          } else {
+            const normalizedEndpoint = endpoint.startsWith("/")
+              ? endpoint.slice(1)
+              : endpoint;
+            url = new URL(normalizedEndpoint, baseURL).toString();
+          }
         } catch (err) {
           throw new Error(`
             [useFetch] Failed to create URL.
             Base URL : ${baseURL}
             Endpoint : ${endpoint}
-            Example valid:
-            baseURL  -> http://localhost:8080/api/
-            endpoint -> /users
           `);
         }
 
@@ -177,6 +181,34 @@ export const fetchCore = async ({
     setDedupRequest(dedupKey, promise);
     return promise;
   }
+
+  //#region Error Message
+  if (!baseURL) {
+    throw new Error(
+      `[useFetch] baseURL is not set.\n\n` +
+        `Please set it in main.ts:\n\n` +
+        `  useFetch.baseURL('https://your-api.com/api/')\n\n` +
+        `or pass it per request:\n\n` +
+        `  useFetch('/users', { baseURL: 'https://your-api.com/api/' })\n`
+    );
+  }
+
+  if (!endpoint || endpoint.trim() === "") {
+    throw new Error(
+      `[useFetch] endpoint is required.\n\n` +
+        `Example:\n\n` +
+        `  useFetch('/users')\n`
+    );
+  }
+
+  throw new Error(
+    `[useFetch] Failed to build URL.\n\n` +
+      `  baseURL : ${baseURL}\n` +
+      `  endpoint: ${endpoint}\n\n` +
+      `Make sure baseURL ends with '/' and endpoint starts with '/':\n\n` +
+      `  useFetch.baseURL('https://your-api.com/api/')\n` +
+      `  useFetch('/users')\n`
+  );
 
   return runFetch();
 };

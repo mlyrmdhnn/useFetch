@@ -59,26 +59,6 @@ useFetch.baseURL("https://your-api.com/api/");
 
 ---
 
-## Project Structure
-
-```
-lib/
-└── fetch/
-    ├── cache.ts        # SessionStorage cache handler
-    ├── config.ts       # Global config & instance factory
-    ├── core.ts         # Core fetch logic
-    ├── dedup.ts        # Request deduplication
-    ├── helpers.ts      # Utility functions
-    ├── interceptor.ts  # Global & instance interceptors
-    ├── statusHooks.ts  # HTTP status code hooks
-    ├── types.ts        # TypeScript types & interfaces
-    └── watcher.ts      # Reactive params watcher
-http/
-└── useFetch.ts         # Main composable entry point
-```
-
----
-
 ## Basic Usage
 
 ### JavaScript
