@@ -8,20 +8,33 @@
  * @param fileName
  * @param fileValue
  * @param preview
- * @returns
  */
-export const documentHandler = (
+
+export function documentHandler(
+  reactiveObj: Record<string, any>,
+  fileName: string,
+  fileValue: File | Blob | null,
+  preview?: false,
+): FormData
+
+export function documentHandler(
+  reactiveObj: Record<string, any>,
+  fileName: string,
+  fileValue: File | Blob | null,
+  preview: true,
+): { formData: FormData; previewValue: string }
+
+export function documentHandler(
   reactiveObj: Record<string, any>,
   fileName: string,
   fileValue: File | Blob | null,
   preview: boolean = false,
-) => {
+): any {
   const formData = new FormData()
 
   for (const key in reactiveObj) {
     if (Object.prototype.hasOwnProperty.call(reactiveObj, key)) {
       const value = reactiveObj[key]
-
       if (value !== undefined && value !== null) {
         formData.append(
           key,
@@ -41,10 +54,8 @@ export const documentHandler = (
     return formData
   }
 
-  const previewValue = fileValue ? URL.createObjectURL(fileValue) : ''
-
   return {
     formData,
-    previewValue,
+    previewValue: fileValue ? URL.createObjectURL(fileValue) : '',
   }
 }

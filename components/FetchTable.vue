@@ -5,18 +5,22 @@
 
 import { useFetch } from "../http/useFetch";
 import { useRoute, useRouter } from "vue-router";
-import { reactive, watch, computed } from "vue";
+import { reactive, watch, computed, onMounted } from "vue";
 import { useDebounceFn } from "../handler/useDebounceFn";
 const route = useRoute();
 const router = useRouter();
+
 /**
  * Interface Props.
  */
-
 interface Props {
   cols: any[];
+  title?: string;
   cssClass?: {
     divCss?: string;
+    titleCss?: string;
+    headerCss?: string;
+    tableWrapperCss?: string;
     tableCss?: string;
     theadCss?: string;
     tbodyCss?: string;
@@ -42,11 +46,43 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   cols: () => [],
   cssClass: () => ({}),
+  title: "Table",
   showSearch: false,
-  searchPlaceholder: "Search...",
+  searchPlaceholder: "Search something...",
   showActions: false,
   endpoint: "",
   notFoundText: "Data Not Found",
+});
+
+const classes = computed(() => {
+  const defaultStyle = {
+    divCss:
+      "w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden",
+    titleCss: "text-xl font-semibold text-slate-800 tracking-tight",
+    headerCss:
+      "flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-6 border-b border-slate-200",
+    searchCss:
+      "w-full md:w-72 px-4 py-2.5 text-sm bg-white border border-slate-300 rounded-xl outline-none transition-all focus:ring-4 focus:ring-blue-100 focus:border-blue-500 placeholder:text-slate-400",
+    tableWrapperCss: "w-full overflow-x-auto",
+    tableCss: "w-full border-collapse min-w-[600px]",
+    theadCss: "bg-slate-50",
+    tbodyCss: "divide-y divide-slate-100",
+    trCss: "transition-colors hover:bg-slate-50",
+    thCss:
+      "px-6 py-4 text-xs font-semibold uppercase tracking-wider text-slate-500",
+    tdCss: "px-6 py-4 text-sm text-slate-700",
+    tdCssLoading:
+      "px-6 py-5 relative before:block before:h-4 before:w-full before:rounded-lg before:bg-slate-200 before:animate-pulse",
+    notFoundCss: "py-16 text-center text-sm text-slate-400",
+    navCss:
+      "flex flex-wrap items-center justify-end gap-2 p-6 border-t border-slate-200",
+    navButton:
+      "h-10 min-w-[40px] px-3 text-sm font-medium border border-slate-300 bg-white rounded-xl hover:bg-slate-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed",
+    activeButton:
+      "h-10 min-w-[40px] px-3 text-sm font-medium rounded-xl bg-neutral-900 text-slate-200 shadow-sm",
+    navCssButtonLoading: "h-10 w-10 rounded-xl bg-slate-200 animate-pulse",
+  };
+  return { ...defaultStyle, ...props.cssClass };
 });
 
 const params = reactive({
@@ -61,20 +97,18 @@ watch(
   { deep: true },
 );
 
-/**
- * Fetching.
- */
-const { data, pending, from, to, total, links } = useFetch(props.endpoint, {
+const { data, pending, links, execute } = useFetch(props.endpoint, {
   watchParams: true,
   params: params,
   pagination: true,
   pick: props.pick,
+  immediate: false,
 });
 
-/**
- * Safe Data Array normalization for the template.
- * Handles cases where data is a direct array or wrapped in a Laravel pagination object.
- */
+onMounted(() => {
+  execute();
+});
+
 const tableRows = computed<any[]>(() => {
   if (!data.value) return [];
   if (Array.isArray(data.value)) return data.value;
@@ -102,11 +136,7 @@ const model = defineModel<string>();
 
 const debouncedSearch = useDebounceFn((val) => {
   router.push({
-    query: {
-      ...route.query,
-      page: 1,
-      search: val,
-    },
+    query: { ...route.query, page: 1, search: val },
   });
 }, 500);
 
@@ -114,10 +144,6 @@ watch(model, (val) => {
   debouncedSearch(val);
 });
 
-/**
- * Handler pagination label.
- * @param label
- */
 const resolvePaginationLabel = (label: string) => {
   if (label.includes("&laquo") || label.toLowerCase().includes("&laquo"))
     return "Previous";
@@ -126,97 +152,98 @@ const resolvePaginationLabel = (label: string) => {
   return label;
 };
 
-/**
- * Handler response result from laravel.
- * @param obj
- * @param path
- */
 const getCellValue = (obj: any, path: string): any => {
   if (!path) return "";
   return path.split(".").reduce((current, key) => {
     if (current === null || current === undefined) return "";
-
-    if (Array.isArray(current)) {
+    if (Array.isArray(current))
       return current.map((item) => item[key]).join(", ");
-    }
-
     return current[key];
   }, obj);
 };
 </script>
 
 <template>
-  <div :class="props.cssClass?.divCss">
-    <template v-if="!pending">
+  <div :class="classes.divCss">
+    <div :class="classes.headerCss">
+      <h2 :class="classes.titleCss">
+        {{ props.title }}
+      </h2>
+
       <template v-if="props.showSearch">
         <input
           type="text"
           v-model="model"
-          :class="props.cssClass?.searchCss"
+          :class="classes.searchCss"
           :placeholder="props.searchPlaceholder"
         />
       </template>
+    </div>
 
-      <table :class="props.cssClass?.tableCss">
-        <slot name="thead">
-          <thead :class="props.cssClass?.theadCss">
-            <tr :class="props.cssClass?.trCss">
-              <th
-                v-for="(col, i) in props.cols"
-                :key="'th-' + i"
-                scope="col"
-                :class="['px-6 py-4', props.cssClass?.thCss]"
+    <slot name="component"> </slot>
+    <template v-if="!pending">
+      <div :class="classes.tableWrapperCss">
+        <table :class="classes.tableCss">
+          <slot name="thead">
+            <thead :class="classes.theadCss">
+              <tr :class="classes.trCss">
+                <th :class="classes.thCss">No</th>
+                <th
+                  v-for="(col, i) in props.cols"
+                  :key="'th-' + i"
+                  scope="col"
+                  :class="classes.thCss"
+                >
+                  {{ col.label }}
+                </th>
+                <th v-if="props.showActions" :class="classes.thCss">Actions</th>
+              </tr>
+            </thead>
+          </slot>
+
+          <tbody :class="classes.tbodyCss">
+            <tr
+              :class="classes.trCss"
+              v-for="(row, rowIndex) in tableRows"
+              :key="rowIndex"
+            >
+              <td :class="[classes.tdCss, 'text-center']">
+                {{ rowIndex + 1 }}
+              </td>
+              <td
+                v-for="(col, colIndex) in props.cols"
+                :key="'td-' + colIndex"
+                :class="classes.tdCss"
               >
-                {{ col.label }}
-              </th>
-              <th
-                v-if="props.showActions"
-                :class="['px-6 py-4', props.cssClass?.thCss]"
-              >
-                Options
-              </th>
+                <slot :row="row" :name="col.label">
+                  {{ getCellValue(row, col.key) }}
+                </slot>
+              </td>
+              <td v-if="props.showActions" :class="classes.tdCss">
+                <slot name="actions" :row="row" />
+              </td>
             </tr>
-          </thead>
-        </slot>
 
-        <tbody :class="props.cssClass?.tbodyCss">
-          <tr
-            :class="props.cssClass?.trCss"
-            v-for="(row, rowIndex) in tableRows"
-            :key="rowIndex"
-          >
-            <td
-              v-for="(col, colIndex) in props.cols"
-              :key="'td-' + colIndex"
-              :class="props.cssClass?.tdCss"
-            >
-              <slot :row="row" :name="col.label">
-                {{ getCellValue(row, col.key) }}
-              </slot>
-            </td>
-            <td v-if="props.showActions" :class="props.cssClass?.tdCss">
-              <slot name="actions" :row="row"></slot>
-            </td>
-          </tr>
+            <tr v-if="tableRows.length === 0">
+              <td
+                :colspan="props.cols.length + (props.showActions ? 1 : 0)"
+                :class="classes.notFoundCss"
+              >
+                {{ props.notFoundText }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-          <tr v-if="tableRows.length === 0">
-            <td
-              :colspan="props.cols.length + (props.showActions ? 1 : 0)"
-              :class="['text-center py-4', props.cssClass?.notFoundCss]"
-            >
-              {{ props.notFoundText }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <nav :class="props.cssClass?.navCss">
+      <nav :class="classes.navCss">
         <button
           @click="goTo(l.url)"
           v-for="(l, i) in links"
           :key="i"
+          :disabled="!l.url"
           :class="[
-            l.active ? props.cssClass?.activeButton : props.cssClass?.navButton,
+            l.active ? classes.activeButton : classes.navButton,
             l.url == null ? 'cursor-not-allowed' : 'cursor-pointer',
           ]"
         >
@@ -226,47 +253,37 @@ const getCellValue = (obj: any, path: string): any => {
     </template>
 
     <template v-if="pending">
-      <table :class="props.cssClass?.tableCss">
-        <slot name="thead">
-          <thead :class="props.cssClass?.theadCss">
-            <tr :class="props.cssClass?.trCss">
-              <th
-                v-for="(col, i) in props.cols"
-                :key="'th-' + i"
-                scope="col"
-                :class="['px-6 py-4', props.cssClass?.thCss]"
-              >
-                {{ col.label }}
-              </th>
-              <th
-                v-if="props.showActions"
-                :class="['px-6 py-4', props.cssClass?.thCss]"
-              >
-                Options
-              </th>
+      <div :class="classes.tableWrapperCss">
+        <table :class="classes.tableCss">
+          <slot name="thead">
+            <thead :class="classes.theadCss">
+              <tr :class="classes.trCss">
+                <th
+                  v-for="(col, i) in props.cols"
+                  :key="'th-' + i"
+                  :class="classes.thCss"
+                >
+                  {{ col.label }}
+                </th>
+                <th v-if="props.showActions" :class="classes.thCss">Actions</th>
+              </tr>
+            </thead>
+          </slot>
+          <tbody :class="classes.tbodyCss">
+            <tr v-for="i in 10" :key="i" :class="classes.trCss">
+              <td
+                v-for="(col, colIndex) in props.cols"
+                :key="'td-' + colIndex"
+                :class="classes.tdCssLoading"
+              />
+              <td v-if="props.showActions" :class="classes.tdCssLoading" />
             </tr>
-          </thead>
-        </slot>
-        <tbody :class="props.cssClass?.tbodyCss">
-          <tr v-for="i in 10" :key="i" :class="props.cssClass?.trCss">
-            <td
-              v-for="(col, colIndex) in props.cols"
-              :key="'td-' + colIndex"
-              :class="props.cssClass?.tdCssLoading"
-            ></td>
-            <td
-              v-if="props.showActions"
-              :class="props.cssClass?.tdCssLoading"
-            ></td>
-          </tr>
-        </tbody>
-      </table>
-      <nav :class="props.cssClass?.navCss">
-        <button
-          v-for="i in 5"
-          :key="i"
-          :class="props.cssClass?.navCssButtonLoading"
-        ></button>
+          </tbody>
+        </table>
+      </div>
+
+      <nav :class="classes.navCss">
+        <button v-for="i in 5" :key="i" :class="classes.navCssButtonLoading" />
       </nav>
     </template>
   </div>

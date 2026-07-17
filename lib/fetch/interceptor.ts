@@ -23,6 +23,9 @@ export const createInterceptor = () => {
         const index = requestInterceptors.findIndex((i) => i.id === id)
         if (index !== -1) requestInterceptors.splice(index, 1)
       },
+      push(fn: RequestInterceptorFn): number {
+        return this.use(fn)
+      },
     },
     response: {
       use(fn: ResponseInterceptorFn): number {
@@ -34,6 +37,9 @@ export const createInterceptor = () => {
         const index = responseInterceptors.findIndex((i) => i.id === id)
         if (index !== -1) responseInterceptors.splice(index, 1)
       },
+      push(fn: ResponseInterceptorFn): number {
+        return this.use(fn)
+      },
     },
     error: {
       use(fn: ErrorInterceptorFn): number {
@@ -44,6 +50,9 @@ export const createInterceptor = () => {
       eject(id: number): void {
         const index = errorInterceptors.findIndex((i) => i.id === id)
         if (index !== -1) errorInterceptors.splice(index, 1)
+      },
+      push(fn: ErrorInterceptorFn): number {
+        return this.use(fn)
       },
     },
   }

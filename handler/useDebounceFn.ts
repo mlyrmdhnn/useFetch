@@ -1,4 +1,3 @@
-// useDebounce.ts
 import { onUnmounted } from 'vue'
 
 export function useDebounceFn<T extends (...args: any[]) => any>(fn: T, delay = 300) {

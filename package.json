@@ -1,7 +1,10 @@
 {
-  "name": "@mlyrmdhnn/use-fetch",
-  "version": "1.0.3",
-  "description": "Custom HTTP client and Vue component",
+  "name": "vnexum-vue",
+  "publishConfig": {
+    "access": "public"
+  },
+  "version": "1.0.1",
+  "description": "The data driven toolkit for vue",
   "type": "module",
   "main": "./dist/index.cjs.js",
   "module": "./dist/index.es.js",
@@ -27,8 +30,12 @@
     "@types/node": "^25.9.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "vite": "^8.0.16",
+    "vite-plugin-css-injected-by-js": "^5.0.1",
     "vite-plugin-dts": "^5.0.2",
     "vue-router": "^5.1.0",
     "vue-tsc": "^3.3.3"
+  },
+  "dependencies": {
+    "tailwindcss": "^4.3.2"
   }
 }
