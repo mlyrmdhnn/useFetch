@@ -1,3 +1,5 @@
+import { resolveLabel } from "./handler/resolveLabel";
+
 /**
  * Export main http engine.
  */
@@ -17,6 +19,7 @@ export { copyToClipboard } from "./handler/clipBoardHandler";
 export { formatDate } from "./handler/dateFormatter";
 export { resolveCurrency } from "./handler/formatToCurrency";
 export { documentHandler } from "./handler/formDataHandler";
+export { resolveLabel } from "./handler/resolveLabel";
 export { logger } from "./handler/logger";
 export { toast, toastState } from "./handler/toast";
 
