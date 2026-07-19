@@ -1,4 +1,5 @@
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type StreamMode = "text" | "sse" | "ndjson";
 
 export interface HttpHeaders {
   Authorization?: string;
@@ -41,6 +42,9 @@ export interface HttpOptions {
   xsrfHeaderName?: string;
   dedup?: boolean;
   skipInterceptor?: boolean;
+  stream?: boolean;
+  streamMode?: StreamMode;
+  onChunk?: (parsed: any, raw: string) => void;
 }
 
 export interface ResponseContext {

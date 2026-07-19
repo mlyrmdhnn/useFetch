@@ -19,6 +19,7 @@ import type {
   ResponseInterceptorFn,
   ErrorInterceptorFn,
   ResponseContext,
+  StreamMode,
 } from "./types";
 
 interface FetchCoreParams {
@@ -49,14 +50,21 @@ export const fetchCore = async ({
     credentials = false,
     headers = {},
     timeout = 10000,
-    retry = 0,
     retryDelay = 1000,
     cache = false,
     cacheKey,
     baseURL = config.baseURL,
     dedup = false,
     skipInterceptor = false,
+    stream = false,
+    streamMode = "text" as StreamMode,
+    onStreamChunk,
+    onStreamDone,
   } = options;
+
+  // Streams shouldn't silently retry — partial chunks would already have
+  // been emitted downstream, so a retry means duplicate data.
+  let retry = stream ? 0 : (options.retry ?? 0);
 
   const reqInterceptors = [
     ...requestInterceptors,
@@ -72,9 +80,6 @@ export const fetchCore = async ({
   ];
 
   const queryString = buildQueryString(params);
-  /**
-   * Core fetch logic extracted so dedup can wrap it.
-   */
 
   if (!endpoint || endpoint.trim() === "") {
     return console.error(
@@ -103,6 +108,45 @@ export const fetchCore = async ({
   };
 
   let url = joinPath(baseURL, endpoint);
+
+  /**
+   * Parses a raw SSE/NDJSON buffer chunk by chunk, calling onStreamChunk
+   * for each complete frame and returning the leftover partial buffer.
+   */
+  const consumeBuffer = (buffer: string, mode: StreamMode): string => {
+    if (mode === "sse") {
+      const parts = buffer.split("\n\n");
+      const rest = parts.pop() ?? "";
+      for (const part of parts) {
+        const line = part.replace(/^data:\s*/, "").trim();
+        if (!line || line === "[DONE]") continue;
+        try {
+          onStreamChunk?.(JSON.parse(line), line);
+        } catch {
+          onStreamChunk?.(line, line);
+        }
+      }
+      return rest;
+    }
+
+    if (mode === "ndjson") {
+      const lines = buffer.split("\n");
+      const rest = lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          onStreamChunk?.(JSON.parse(line), line);
+        } catch {
+          onStreamChunk?.(line, line);
+        }
+      }
+      return rest;
+    }
+
+    // "text" mode: nothing to buffer, chunk is passed straight through
+    // by the caller before consumeBuffer is invoked.
+    return "";
+  };
 
   const runFetch = async (): Promise<any> => {
     let attempts = 0;
@@ -148,7 +192,86 @@ export const fetchCore = async ({
         );
         const statusCode = response.status;
 
-        clearTimeout(timeoutId);
+        // For streams we don't want the timeout aborting a long-lived
+        // connection once bytes are already flowing.
+        if (!stream) clearTimeout(timeoutId);
+
+        // ---------- Streaming branch ----------
+        if (stream) {
+          if (!response.ok) {
+            clearTimeout(timeoutId);
+            let errText = "";
+            try {
+              errText = await response.text();
+            } catch {
+              // ignore
+            }
+            await runStatusHooks(response.status, errText);
+            const instanceHooks = instanceConfig?.statusHooks ?? [];
+            for (const hook of instanceHooks) {
+              if (hook.status === response.status) {
+                await hook.fn(errText);
+              }
+            }
+            const error = new Error(errText || "Stream request failed");
+            (error as any).statusCode = response.status;
+            (error as any).data = errText;
+            throw error;
+          }
+
+          if (!response.body) {
+            clearTimeout(timeoutId);
+            throw new Error(
+              "[useFetch] Stream requested but response has no body.",
+            );
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let fullText = "";
+          let buffer = "";
+
+          clearTimeout(timeoutId);
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunkText = decoder.decode(value, { stream: true });
+            fullText += chunkText;
+
+            if (streamMode === "text") {
+              onStreamChunk?.(chunkText, chunkText);
+            } else {
+              buffer += chunkText;
+              buffer = consumeBuffer(buffer, streamMode);
+            }
+          }
+
+          // flush any trailing partial frame
+          if (streamMode !== "text" && buffer.trim()) {
+            consumeBuffer(buffer + "\n\n", streamMode);
+          }
+
+          onStreamDone?.();
+
+          let responseContext: ResponseContext = {
+            data: fullText,
+            status: response.status,
+            statusText: response.statusText,
+            headers: response.headers,
+          };
+
+          if (!skipInterceptor) {
+            for (const interceptor of resInterceptors) {
+              responseContext = await interceptor.fn(responseContext);
+            }
+          }
+
+          return { data: responseContext.data, statusCode: response.status };
+        }
+
+        // ---------- Normal (non-stream) branch ----------
         const contentType = response.headers.get("content-type");
         let result;
         if (contentType && contentType.includes("application/json")) {
@@ -170,7 +293,6 @@ export const fetchCore = async ({
           }
         }
 
-        // Extract data after interceptors
         result = responseContext.data;
 
         if (!response.ok) {
@@ -188,8 +310,6 @@ export const fetchCore = async ({
           (error as any).data = result;
           throw error;
         }
-
-        // if (cache) setCache(cacheKey, result)
 
         return { data: result, statusCode };
       } catch (err) {
@@ -212,10 +332,11 @@ export const fetchCore = async ({
   };
 
   /**
-   * Deduplication — only for GET requests.
-   * If same request is already in-flight, return existing promise.
+   * Deduplication — only for GET requests, and never for streams
+   * (a second caller would just get the already-resolved final value,
+   * not live chunks, which defeats the point of streaming).
    */
-  if (dedup && method === "GET") {
+  if (dedup && method === "GET" && !stream) {
     const dedupKey = buildDedupKey(endpoint, method, params);
     const existing = getDedupRequest(dedupKey);
 

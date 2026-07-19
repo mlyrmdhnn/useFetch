@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import type { HttpOptions, HttpHeaders } from "../lib/fetch/types";
+import type { HttpOptions, HttpHeaders, StreamMode } from "../lib/fetch/types";
 import type {
   RequestInterceptorFn,
   ResponseInterceptorFn,
@@ -76,12 +76,16 @@ function buildUseFetch<T>(
     onError,
     onFinally,
     skipInterceptor,
+    stream = false,
+    streamMode = "text" as StreamMode,
+    onChunk,
     ...rest
   } = options;
 
   const data = ref<T | null>(null);
   const error = ref<any>(null);
   const pending = ref(false);
+  const streaming = ref(false);
   const status = ref<"idle" | "pending" | "success" | "error">("idle");
   const links = ref<any[]>([]);
   const from = ref(0);
@@ -177,15 +181,15 @@ function buildUseFetch<T>(
       status.value = "pending";
       error.value = null;
 
-      // ✅ Bug 5 fixed: resolve payload before passing to hook
       const resolvedPayload = resolvePayload(options.payload);
       onBeforeRequest?.(resolvedPayload);
 
       //#region Cache Key
-      const generatedKey = endpoint + JSON.stringify(options.params ?? {});
       const key = endpoint + JSON.stringify(options.params ?? {}) + cacheKey;
+
       // ✅ Cache: return early but properly reset pending
-      if (cache) {
+      // (streams are never cached — skip this branch entirely for them)
+      if (cache && !stream) {
         const cachedData = getCache(key);
         if (cachedData !== null) {
           if (
@@ -213,6 +217,13 @@ function buildUseFetch<T>(
         }
       }
 
+      // Reset data before a stream starts so consumers don't see stale
+      // content while the new stream is filling in.
+      if (stream) {
+        streaming.value = true;
+        data.value = (streamMode === "text" ? "" : []) as unknown as T;
+      }
+
       const { data: result, statusCode: responseStatusCode } = await fetchCore({
         endpoint,
         controller,
@@ -223,6 +234,20 @@ function buildUseFetch<T>(
           cacheKey,
           skipInterceptor,
           cache: false,
+          stream,
+          streamMode,
+          onStreamChunk: (chunk: any, raw: string) => {
+            if (streamMode === "text") {
+              data.value = (((data.value as any) ?? "") +
+                chunk) as unknown as T;
+            } else {
+              (data.value as any[]).push(chunk);
+            }
+            onChunk?.(chunk, raw);
+          },
+          onStreamDone: () => {
+            streaming.value = false;
+          },
         },
         instanceConfig,
         instanceRequestInterceptors: instanceInterceptors?.requestInterceptors,
@@ -232,38 +257,43 @@ function buildUseFetch<T>(
       });
 
       statusCode.value = responseStatusCode;
-      if (pagination) {
-        const pg = extractPagination(result, paginationKey, pick);
-        let resolvedData = pg.data;
-        if (transform) resolvedData = transform(resolvedData);
 
-        const cachePayload = {
-          data: resolvedData,
-          links: pg.links,
-          from: pg.from,
-          to: pg.to,
-          total: pg.total,
-          currentPage: pg.current_page,
-        };
+      // Streaming already built `data` incrementally via onStreamChunk —
+      // don't let pagination/pick/transform stomp on it afterward.
+      if (!stream) {
+        if (pagination) {
+          const pg = extractPagination(result, paginationKey, pick);
+          let resolvedData = pg.data;
+          if (transform) resolvedData = transform(resolvedData);
 
-        if (cache) {
-          setCache(key, cachePayload, cacheDescription);
+          const cachePayload = {
+            data: resolvedData,
+            links: pg.links,
+            from: pg.from,
+            to: pg.to,
+            total: pg.total,
+            currentPage: pg.current_page,
+          };
+
+          if (cache) {
+            setCache(key, cachePayload, cacheDescription);
+          }
+
+          data.value = resolvedData;
+          links.value = pg.links;
+          from.value = pg.from;
+          to.value = pg.to;
+          total.value = pg.total;
+          currentPage.value = pg.current_page;
+        } else {
+          let resolvedData = resolvePath(result, pick);
+          if (transform) resolvedData = transform(resolvedData);
+
+          if (cache) {
+            setCache(key, resolvedData, cacheDescription);
+          }
+          data.value = resolvedData;
         }
-
-        data.value = resolvedData;
-        links.value = pg.links;
-        from.value = pg.from;
-        to.value = pg.to;
-        total.value = pg.total;
-        currentPage.value = pg.current_page;
-      } else {
-        let resolvedData = resolvePath(result, pick);
-        if (transform) resolvedData = transform(resolvedData);
-
-        if (cache) {
-          setCache(key, resolvedData, cacheDescription);
-        }
-        data.value = resolvedData;
       }
 
       status.value = "success";
@@ -273,6 +303,7 @@ function buildUseFetch<T>(
       status.value = "error";
       error.value = err;
       statusCode.value = err?.statusCode || 0;
+      streaming.value = false;
       onError?.(err);
     } finally {
       pending.value = false;
@@ -282,7 +313,6 @@ function buildUseFetch<T>(
 
   const refresh = () => execute();
 
-  // ✅ Bug 2 fixed: clear resets ALL state including pagination
   const clear = () => {
     data.value = null;
     error.value = null;
@@ -293,12 +323,13 @@ function buildUseFetch<T>(
     total.value = 0;
     currentPage.value = 1;
     statusCode.value = 0;
+    streaming.value = false;
   };
 
-  // ✅ Bug 3 fixed: replace controller after abort so next execute() works
   const abort = () => {
     controller.abort();
     controller = new AbortController();
+    streaming.value = false;
   };
 
   if (method !== "GET") {
@@ -314,6 +345,7 @@ function buildUseFetch<T>(
     data,
     error,
     pending,
+    streaming,
     status,
     links,
     from,
