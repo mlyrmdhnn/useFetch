@@ -1,47 +1,41 @@
-interface CustomLabelReturn {
-  prev: {
-    label: "";
-    result: "";
-  };
-  next: {
-    label: "";
-    result: "";
-  };
-}
-
-export interface ResolveLabelOptions {
+export interface PaginationConfig {
   /**
-   * Text will return Previous or Next
-   * Arrow will return << or >>
+   * Css class for navigation button.
+   * Example (Previous and Next)
    */
-  arrowText?: "text" | "arrow";
-
-  customLabel?: CustomLabelReturn;
+  navButton?: string
+  /**
+   * Css class for number button(1,2,3).
+   */
+  numberButton?: string
+  /**
+   * Is the button on current page.
+   */
+  active?: string
 }
 
-export const resolveLabel = (
+export const resolvePaginationLabel = (
   label: string,
-  options: ResolveLabelOptions = {},
+  active: boolean,
+  config: PaginationConfig,
 ) => {
-  /**
-   *  By default, if the label is &laquo and &raquo, it will return Previous and Next
-   * @returns 'Previous/Next'
-   */
-  const { arrowText = "text", customLabel } = options;
-  if (customLabel) {
-    if (label == customLabel.prev.label) return customLabel.prev.result;
-    if (label == customLabel.next.label) return customLabel.next.result;
+  const prev = label.includes('&laquo') || label.toLowerCase().includes('previous')
+  const next = label.includes('&raquo') || label.toLowerCase().includes('next')
+  let cleanLabel = label
+  if (prev) cleanLabel = 'Previous'
+  if (next) cleanLabel = 'Next'
+  let computedClass = prev || next ? (config.navButton ?? '') : (config.numberButton ?? '')
+  if (active && config.active) {
+    computedClass = `${computedClass} ${config.active}`
   }
-
-  if (arrowText == "text" && label.toLocaleLowerCase().includes("&laquo"))
-    return "Previous";
-  if (arrowText == "text" && label.toLocaleLowerCase().includes("&raquo"))
-    return "Next";
-
-  if (arrowText == "arrow" && label.toLocaleLowerCase().includes("&laquo"))
-    return "<<";
-  if (arrowText == "arrow" && label.toLocaleLowerCase().includes("&raquo"))
-    return ">>";
-
-  return label;
-};
+  if (cleanLabel === '...') {
+    computedClass = `${config.numberButton} cursor-not-allowed`
+  } else {
+    computedClass = 'cursor-pointer ' + computedClass
+  }
+  return {
+    label: cleanLabel,
+    className: computedClass.trim(),
+    isNav: prev || next,
+  }
+}

@@ -5,21 +5,36 @@ export const logger = {
     isProduction = value;
   },
 
-  log(...args: any[]) {
+  log(message: string, ...args: any[]) {
     if (isProduction) return;
 
-    console.log("%c[Nexus-Info]", "color:#10b981;font-weight:bold", ...args);
+    console.log(
+      "%c[vNexum-Info]",
+      "color:#10b981;font-weight:bold",
+      message,
+      ...args,
+    );
   },
 
-  warn(...args: any[]) {
+  warn(message: string, ...args: any[]) {
     if (isProduction) return;
 
-    console.warn("%c[Nexus-Warn]", "color:#f59e0b;font-weight:bold", ...args);
+    console.warn(
+      "%c[vNexum-Warn]",
+      "color:#f59e0b;font-weight:bold",
+      message,
+      ...args,
+    );
   },
 
-  error(...args: any[]) {
+  error(message: string, ...args: any[]) {
     if (isProduction) return;
 
-    console.error("%c[Nexus-Error]", "color:#ef4444;font-weight:bold", ...args);
+    console.error(
+      "%c[vNexum-Error]",
+      "color:#ef4444;font-weight:bold",
+      message,
+      ...args,
+    );
   },
 };
